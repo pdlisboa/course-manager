@@ -23,7 +23,7 @@ services:
       # Pasta dos cursos no servidor → /courses dentro do container (somente leitura)
       - ${COURSES_PATH:?Defina COURSES_PATH com a pasta dos cursos no servidor}:/courses:ro
       # Banco com o progresso
-      - aulas-data:/data
+      # - aulas-data:/data
 
 volumes:
   aulas-data:

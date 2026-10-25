@@ -159,10 +159,6 @@ async function renderHome() {
   app.innerHTML = `<div class="loading">Carregando…</div>`;
   const courses = await api('/api/courses');
 
-  if (courses.length === 1) {
-    location.replace(`#/c/${encodeURIComponent(courses[0].id)}`);
-    return;
-  }
   if (!courses.length) {
     app.innerHTML = `<div class="empty"><h2>Nenhum curso encontrado</h2>
       <p>Verifique se a pasta de cursos (<code>COURSES_DIR</code>) está montada e tem subpastas com vídeos.</p></div>`;
@@ -224,7 +220,7 @@ async function renderCourse(courseId, lessonPath) {
   }
   renderSidebar();
   setBreadcrumb([
-    ...(course.id === 'curso' ? [] : [{ label: 'Cursos', href: '#/' }]),
+    { label: 'Cursos', href: '#/' },
     { label: course.title, href: `#/c/${encodeURIComponent(course.id)}` },
     { label: lesson.module.title },
   ]);

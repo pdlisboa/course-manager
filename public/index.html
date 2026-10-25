@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aulas</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%234f7cff'/><path d='M9 7l8 5-8 5z' fill='white'/></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand">
+      <span class="brand-icon" aria-hidden="true">▶</span>
+      <span>Aulas</span>
+    </a>
+    <nav id="breadcrumb" class="breadcrumb"></nav>
+    <div class="topbar-actions">
+      <button id="rescan" class="icon-btn" title="Reescanear pastas" aria-label="Reescanear pastas">⟳</button>
+      <button id="theme" class="icon-btn" title="Alternar tema" aria-label="Alternar tema">◐</button>
+    </div>
+  </header>
+
+  <main id="app"></main>
+
+  <dialog id="viewer" class="viewer">
+    <div class="viewer-bar">
+      <strong id="viewer-title"></strong>
+      <div class="viewer-actions">
+        <a id="viewer-open" class="btn" target="_blank" rel="noopener">Abrir em nova aba</a>
+        <button class="btn" data-close>Fechar</button>
+      </div>
+    </div>
+    <iframe id="viewer-frame" title="Visualizador de arquivo"></iframe>
+  </dialog>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

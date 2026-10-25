@@ -1,0 +1,23 @@
+services:
+  aulas:
+    build: .
+    image: aulas:latest
+    container_name: aulas
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Nome do curso. Deixe vazio para que cada subpasta de /courses vire um curso.
+      COURSE_NAME: "Meu Curso"
+      # Senha opcional (qualquer usuário). Vazio = sem senha.
+      APP_PASSWORD: ""
+      # A partir de quantos % assistidos a aula conta como concluída.
+      COMPLETE_THRESHOLD: "0.9"
+    volumes:
+      # Pasta do curso no servidor → /courses (somente leitura)
+      - /caminho/no/servidor/MeuCurso:/courses:ro
+      # Banco com o progresso
+      - aulas-data:/data
+
+volumes:
+  aulas-data:

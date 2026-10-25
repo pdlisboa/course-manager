@@ -1,83 +1,83 @@
-# Aulas
+# Course Manager
 
-App web para assistir videoaulas e acompanhar o progresso (geral, por módulo e por vídeo).
-Roda em Docker e é configurado por variáveis de ambiente.
+Web app for watching video lessons and tracking progress (overall, per module and per video).
+Runs in Docker and is configured through environment variables. The interface is in Brazilian Portuguese.
 
-## Como organizar os arquivos
+## Organizing your files
 
 ```
-MeuCurso/
-  01 - Introdução/
-    01 - Boas-vindas.mp4
-    01 - Boas-vindas.pdf     ← mesmo nome do vídeo = anexo da aula
-    materiais.zip            ← sem vídeo correspondente = material do módulo
-  02 - Básico/
+MyCourse/
+  01 - Introduction/
+    01 - Welcome.mp4
+    01 - Welcome.pdf         ← same name as the video = attached to that lesson
+    materials.zip            ← no matching video = module material
+  02 - Basics/
     ...
 ```
 
-- Cada **subpasta** é um **módulo**; cada **vídeo** (`.mp4`, `.webm`, `.m4v`, `.mov`) é uma **aula**.
-- A ordem segue o nome (ordenação natural: "2" vem antes de "10"). Números no início são escondidos no título.
-- PDFs abrem dentro do app; ZIPs e outros arquivos são baixados.
+- Each **subfolder** is a **module**; each **video** (`.mp4`, `.webm`, `.m4v`, `.mov`) is a **lesson**.
+- Order follows the file names (natural sort: "2" comes before "10"). Leading numbers are hidden from titles.
+- PDFs open inside the app; ZIPs and other files are downloaded.
 
-## Variáveis de ambiente
+## Environment variables
 
-| Variável | Padrão | O que faz |
+| Variable | Default | Description |
 |---|---|---|
-| `COURSES_DIR` | `/courses` | Pasta com os cursos dentro do container |
-| `COURSE_NAME` | — | Se definida, `COURSES_DIR` é **um curso só** com esse nome. Se vazia, **cada subpasta** de `COURSES_DIR` vira um curso |
-| `DATA_DIR` | `/data` | Onde o banco de progresso (`progress.db`) é salvo |
-| `APP_PASSWORD` | — | Senha opcional. O navegador pede usuário/senha: o usuário pode ser qualquer um |
-| `COMPLETE_THRESHOLD` | `0.9` | Fração assistida para a aula contar como concluída |
-| `PORT` | `3000` | Porta do servidor |
+| `COURSES_DIR` | `/courses` | Folder with the courses inside the container |
+| `COURSE_NAME` | — | If set, `COURSES_DIR` is **a single course** with this name. If empty, **each subfolder** of `COURSES_DIR` becomes a course |
+| `DATA_DIR` | `/data` | Where the progress database (`progress.db`) is stored |
+| `APP_PASSWORD` | — | Optional password. The browser asks for username/password; any username works |
+| `COMPLETE_THRESHOLD` | `0.9` | Fraction watched for a lesson to count as completed |
+| `PORT` | `3000` | Server port |
 
-## Subindo no Portainer
+## Deploying with Portainer
 
-O Portainer precisa de uma imagem. Duas formas:
+Portainer needs an image. Two options:
 
-**A) Stack a partir de um repositório Git (mais simples)**
-1. Coloque esta pasta num repositório Git (GitHub, Gitea etc.).
-2. Portainer → *Stacks* → *Add stack* → *Repository*, aponte para o repositório e o arquivo `docker-compose.yml`.
-3. Ajuste no compose (ou em *Environment variables*) o caminho do volume do curso e as variáveis.
-4. *Deploy*. O Portainer faz o build da imagem no servidor.
+**A) Stack from a Git repository (simplest)**
+1. Push this folder to a Git repository (GitHub, Gitea, etc.).
+2. Portainer → *Stacks* → *Add stack* → *Repository*, point it to the repository and the `docker-compose.yml` file.
+3. Adjust the course volume path and the variables in the compose file (or under *Environment variables*).
+4. *Deploy*. Portainer builds the image on the server.
 
-**B) Build no servidor e stack pelo editor**
+**B) Build on the server and use the web editor**
 ```bash
 docker build -t aulas:latest .
 ```
-Depois, em *Stacks → Add stack → Web editor*, cole o `docker-compose.yml` removendo a linha `build: .`.
+Then, under *Stacks → Add stack → Web editor*, paste the `docker-compose.yml` without the `build: .` line.
 
 ### Volumes
-- Monte a pasta do curso em `/courses` como somente leitura (`:ro`).
-- `/data` guarda o progresso. Use um volume nomeado (como no compose de exemplo). Se usar uma pasta do servidor (bind mount), ela precisa ser gravável pelo usuário `1000` do container: `sudo chown 1000:1000 /caminho/data`.
+- Mount the course folder at `/courses` as read-only (`:ro`).
+- `/data` stores the progress. Use a named volume (as in the example compose file). If you use a host folder (bind mount), it must be writable by the container's user `1000`: `sudo chown 1000:1000 /path/to/data`.
 
-### Vários cursos
-Deixe `COURSE_NAME` vazio e monte a pasta que contém todos os cursos:
+### Multiple courses
+Leave `COURSE_NAME` empty and mount the folder that contains all courses:
 ```yaml
 volumes:
-  - /srv/cursos:/courses:ro   # /srv/cursos/Curso A, /srv/cursos/Curso B ...
+  - /srv/courses:/courses:ro   # /srv/courses/Course A, /srv/courses/Course B ...
 ```
 
-## Usando
-- A tela do curso mostra o progresso geral (aulas concluídas e horas assistidas) e o de cada módulo.
-- O vídeo salva a posição a cada 5 s e ao pausar/fechar; ao voltar, continua de onde parou.
-- A aula é marcada como concluída ao passar de 90% (ou manualmente pelo botão).
-- Adicionou vídeos na pasta? Clique em **⟳** no topo para reescanear.
-- Atalhos: espaço/K pausar · J/L ±10s · N próxima · P anterior · F tela cheia · M concluir.
+## Usage
+- The course page shows overall progress (completed lessons and hours watched) and progress for each module.
+- The video saves its position every 5 s and when paused/closed; when you come back, it resumes where you left off.
+- A lesson is marked as completed after 90% is watched (or manually with the button).
+- Added new videos to the folder? Click **⟳** at the top to rescan.
+- Shortcuts: space/K pause · J/L ±10s · N next · P previous · F fullscreen · M mark as completed.
 
-## Desenvolvimento
+## Development
 
-Precisa do Node.js 24+ (roda TypeScript direto, sem build).
+Requires Node.js 24+ (runs TypeScript directly, no build step).
 
 ```bash
 npm install
-COURSES_DIR=/caminho/do/curso DATA_DIR=./data npm run dev   # recarrega ao salvar
-npm run typecheck                                           # checa os tipos
+COURSES_DIR=/path/to/course DATA_DIR=./data npm run dev   # reloads on save
+npm run typecheck                                         # type checking
 ```
 
-| Arquivo | Responsabilidade |
+| File | Responsibility |
 |---|---|
-| `src/config.ts` | Lê as variáveis de ambiente |
-| `src/scanner.ts` | Varre as pastas e monta curso → módulos → aulas |
-| `src/db.ts` | Banco SQLite (progresso e cache de duração dos vídeos) |
-| `src/server.ts` | Servidor Express: API, arquivos de mídia, senha |
-| `public/` | Interface (HTML, CSS e JS puro) |
+| `src/config.ts` | Reads the environment variables |
+| `src/scanner.ts` | Scans the folders and builds course → modules → lessons |
+| `src/db.ts` | SQLite database (progress and video duration cache) |
+| `src/server.ts` | Express server: API, media files, password |
+| `public/` | Interface (plain HTML, CSS and JS) |

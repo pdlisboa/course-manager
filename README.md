@@ -32,30 +32,25 @@ MyCourse/
 
 ## Deploying with Portainer
 
-Portainer needs an image. Two options:
+The `docker-compose.yml` reads everything from the stack's environment variables, so you don't need to edit it:
 
-**A) Stack from a Git repository (simplest)**
-1. Push this folder to a Git repository (GitHub, Gitea, etc.).
-2. Portainer → *Stacks* → *Add stack* → *Repository*, point it to the repository and the `docker-compose.yml` file.
-3. Adjust the course volume path and the variables in the compose file (or under *Environment variables*).
-4. *Deploy*. Portainer builds the image on the server.
+| Stack variable | Default | Description |
+|---|---|---|
+| `COURSES_PATH` | — (required) | Course folder **on the Docker host**, e.g. `/mnt/hd/courses`. Mounted read-only at `/courses` |
+| `COURSE_NAME` | — | Single course name; empty = each subfolder of `COURSES_PATH` is a course |
+| `APP_PASSWORD` | — | Optional password |
+| `COMPLETE_THRESHOLD` | `0.9` | Fraction watched to complete a lesson |
+| `HOST_PORT` | `3000` | Port exposed on the host |
 
-**B) Build on the server and use the web editor**
-```bash
-docker build -t aulas:latest .
-```
-Then, under *Stacks → Add stack → Web editor*, paste the `docker-compose.yml` without the `build: .` line.
+1. Portainer → *Stacks* → *Add stack* → *Repository*, point it to this repository and the `docker-compose.yml` file.
+2. Under *Environment variables*, add `COURSES_PATH` (and any of the others you need).
+3. *Deploy*. Portainer builds the image on the server.
 
-### Volumes
-- Mount the course folder at `/courses` as read-only (`:ro`).
-- `/data` stores the progress. Use a named volume (as in the example compose file). If you use a host folder (bind mount), it must be writable by the container's user `1000`: `sudo chown 1000:1000 /path/to/data`.
+Progress is stored in the named volume `aulas-data` (mounted at `/data`), so it survives redeploys.
 
-### Multiple courses
-Leave `COURSE_NAME` empty and mount the folder that contains all courses:
-```yaml
-volumes:
-  - /srv/courses:/courses:ro   # /srv/courses/Course A, /srv/courses/Course B ...
-```
+### Single course vs. multiple courses
+- `COURSES_PATH=/mnt/hd/courses/My Course` + `COURSE_NAME=My Course` → one course whose subfolders are modules.
+- `COURSES_PATH=/mnt/hd/courses` + empty `COURSE_NAME` → `/mnt/hd/courses/Course A`, `/mnt/hd/courses/Course B`… each becomes a course.
 
 ## Usage
 - The course page shows overall progress (completed lessons and hours watched) and progress for each module.

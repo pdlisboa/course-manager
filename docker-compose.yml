@@ -1,3 +1,12 @@
+# Tudo aqui é configurado pelas variáveis de ambiente da stack no Portainer
+# (Stacks → sua stack → Environment variables). Não precisa editar este arquivo.
+#
+#   COURSES_PATH        (obrigatória) pasta dos cursos NO SERVIDOR, ex.: /mnt/hd/cursos
+#   COURSE_NAME         nome do curso; vazio = cada subpasta de COURSES_PATH vira um curso
+#   APP_PASSWORD        senha opcional; vazio = sem senha
+#   COMPLETE_THRESHOLD  fração assistida para concluir a aula (padrão 0.9)
+#   HOST_PORT           porta no servidor (padrão 3000)
+
 services:
   aulas:
     build: .
@@ -5,17 +14,14 @@ services:
     container_name: aulas
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${HOST_PORT:-3000}:3000"
     environment:
-      # Nome do curso. Deixe vazio para que cada subpasta de /courses vire um curso.
-      COURSE_NAME: "Meu Curso"
-      # Senha opcional (qualquer usuário). Vazio = sem senha.
-      APP_PASSWORD: ""
-      # A partir de quantos % assistidos a aula conta como concluída.
-      COMPLETE_THRESHOLD: "0.9"
+      COURSE_NAME: ${COURSE_NAME:-}
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      COMPLETE_THRESHOLD: ${COMPLETE_THRESHOLD:-0.9}
     volumes:
-      # Pasta do curso no servidor → /courses (somente leitura)
-      - /caminho/no/servidor/MeuCurso:/courses:ro
+      # Pasta dos cursos no servidor → /courses dentro do container (somente leitura)
+      - ${COURSES_PATH:?Defina COURSES_PATH com a pasta dos cursos no servidor}:/courses:ro
       # Banco com o progresso
       - aulas-data:/data
 

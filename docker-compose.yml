@@ -15,9 +15,9 @@ services:
       COMPLETE_THRESHOLD: "0.9"
     volumes:
       # Pasta do curso no servidor → /courses (somente leitura)
-      - /caminho/no/servidor/MeuCurso:/courses:ro
+      # - /caminho/no/servidor/MeuCurso:/courses:ro
       # Banco com o progresso
-      - aulas-data:/data
+      # - aulas-data:/data
 
 volumes:
   aulas-data:

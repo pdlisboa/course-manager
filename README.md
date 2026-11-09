@@ -61,18 +61,29 @@ Progress is stored in the named volume `aulas-data` (mounted at `/data`), so it 
 
 ## Development
 
-Requires Node.js 24+ (runs TypeScript directly, no build step).
+Requires Node.js 24+. The server is TypeScript run directly by Node (no build); the interface is Vue + Vite, compiled into `dist/`.
 
 ```bash
 npm install
-COURSES_DIR=/path/to/course DATA_DIR=./data npm run dev   # reloads on save
-npm run typecheck                                         # type checking
+COURSES_DIR=/path/to/course DATA_DIR=./data npm run dev   # API on :3000 + Vite on :5173 (open this one), both reload on save
+npm run typecheck                                         # tsc (server + shared) and vue-tsc (interface)
+npm run build                                             # compiles the interface into dist/
+npm start                                                 # serves the API and dist/ on :3000
 ```
 
-| File | Responsibility |
+| Path | Responsibility |
 |---|---|
 | `src/config.ts` | Reads the environment variables |
 | `src/scanner.ts` | Scans the folders and builds course → modules → lessons |
-| `src/db.ts` | SQLite database (progress and video duration cache) |
-| `src/server.ts` | Express server: API, media files, password |
-| `public/` | Interface (plain HTML, CSS and JS) |
+| `src/db.ts` | SQLite database (progress and video duration cache), opened on first use |
+| `src/progress.ts` | Builds what the interface receives: lessons + saved progress |
+| `src/server.ts` | Express server: API, media files, password, serves `dist/` |
+| `shared/api.ts` | Types of the API responses, used by both the server and the interface |
+| `shared/progress.ts` | Progress math, used by both the server and the interface |
+| `web/src/views/` | Pages: course list and course page |
+| `web/src/components/` | Header, sidebar, player, files, PDF viewer… |
+| `web/src/stores/course.ts` | Pinia store: open course, current lesson, saving progress |
+| `web/src/composables/` | Preferences, theme, shortcuts, ambient background, PDF viewer |
+| `web/src/lib/` | API calls, formatting, links |
+
+Vue, Vite and the other interface libraries are `devDependencies`: they are only needed to build, so the Docker image ships only the compiled `dist/`.

@@ -3,8 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { config } from './config.ts';
-import { getAllProgress, getProgress, saveProgress, type ProgressRow } from './db.ts';
-import { getCourse, getCourses, getLesson, scan, type Lesson } from './scanner.ts';
+import { getProgress, openDb, saveProgress } from './db.ts';
+import { courseSummaries, courseView, lessonView } from './progress.ts';
+import { getLesson, scan } from './scanner.ts';
 
 const app = express();
 app.use(express.json());
@@ -28,7 +29,11 @@ if (config.password) {
   });
 }
 
-app.use(express.static(path.join(import.meta.dirname, '..', 'public')));
+// Interface já compilada (npm run build → dist/). Em desenvolvimento, o Vite serve o front na porta 5173.
+app.use(express.static(path.join(import.meta.dirname, '..', 'dist')));
+
+// Abre o banco já na inicialização, para um erro de permissão em DATA_DIR aparecer logo.
+openDb();
 
 // A primeira varredura roda em segundo plano; a API espera ela terminar.
 const initialScan = scan();
@@ -37,60 +42,10 @@ app.use('/api', async (_req, _res, next) => {
   next();
 });
 
-// ---------- Helpers de progresso ----------
-
-function lessonView(lesson: Lesson, progress: ProgressRow | undefined) {
-  return {
-    ...lesson,
-    duration: lesson.duration ?? progress?.duration ?? null,
-    position: progress?.position ?? 0,
-    completed: Boolean(progress?.completed),
-    updatedAt: progress?.updated_at ?? null,
-  };
-}
-
-type LessonView = ReturnType<typeof lessonView>;
-
-function summarize(lessons: LessonView[]) {
-  let totalSeconds = 0;
-  let watchedSeconds = 0;
-  for (const l of lessons) {
-    const duration = l.duration ?? 0;
-    totalSeconds += duration;
-    watchedSeconds += l.completed ? duration : Math.min(l.position, duration);
-  }
-  return {
-    total: lessons.length,
-    completed: lessons.filter((l) => l.completed).length,
-    totalSeconds,
-    watchedSeconds,
-  };
-}
-
-function courseView(id: string) {
-  const course = getCourse(id);
-  if (!course) return null;
-  const progress = getAllProgress();
-  const modules = course.modules.map((m) => ({
-    ...m,
-    lessons: m.lessons.map((l) => lessonView(l, progress.get(l.path))),
-  }));
-  const allLessons = modules.flatMap((m) => m.lessons);
-  const last = allLessons
-    .filter((l) => l.updatedAt !== null)
-    .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
-  return { id: course.id, title: course.title, modules, lastLesson: last?.path ?? null, ...summarize(allLessons) };
-}
-
 // ---------- API ----------
 
-app.get('/api/courses',(_req, res) => {
-  res.json(
-    getCourses().map((c) => {
-      const { modules, ...rest } = courseView(c.id)!;
-      return { ...rest, moduleCount: modules.length };
-    }),
-  );
+app.get('/api/courses', (_req, res) => {
+  res.json(courseSummaries());
 });
 
 app.get('/api/courses/:id', (req, res) => {

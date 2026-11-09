@@ -199,7 +199,7 @@ async function renderHome() {
     <div class="cards">${courses.map((c) => {
       const p = pct(c.completed, c.total);
       const cta = p === 100 ? 'Rever curso' : c.completed || c.watchedSeconds ? 'Continuar' : 'Começar';
-      return `<a class="card" href="#/c/${encodeURIComponent(c.id)}">
+      return `<a class="card glass" href="#/c/${encodeURIComponent(c.id)}">
         <div class="card-top">
           <span class="card-icon">${icon('play')}</span>
           <div>
@@ -247,7 +247,7 @@ async function renderCourse(courseId, lessonPath) {
   if (!$('.course')) {
     app.innerHTML = `<div class="course">
       <section class="player-area" id="player-area"></section>
-      <aside class="sidebar" id="sidebar"></aside>
+      <aside class="sidebar glass" id="sidebar" aria-label="Conteúdo do curso"></aside>
     </div>`;
   }
   const changed = state.current !== lesson;
@@ -255,6 +255,7 @@ async function renderCourse(courseId, lessonPath) {
     if (state.current) saveProgress(true);
     if (state.current?.module !== lesson.module) state.openModules.add(lesson.module.id);
     state.current = lesson;
+    clearAmbient();
     renderPlayer();
   }
   renderSidebar({ reveal: changed });
@@ -352,6 +353,7 @@ function renderSidebar({ reveal = false } = {}) {
 
 const AUTOPLAY_KEY = 'aulas-autoplay';
 const SPEED_KEY = 'aulas-speed';
+const SPEEDS = ['0.75', '1', '1.25', '1.5', '1.75', '2'];
 function pref(key, fallback) {
   try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
 }
@@ -368,24 +370,52 @@ function neighbor(offset) {
 function renderFiles(lesson) {
   const groups = [];
   if (lesson.attachments.length) {
-    groups.push(`<div class="files-group"><h3>Desta aula</h3><div class="files-grid">${lesson.attachments.map(fileLink).join('')}</div></div>`);
+    groups.push(`<div class="files-group"><h3>Desta aula</h3><div class="file-list glass">${lesson.attachments.map(fileLink).join('')}</div></div>`);
   }
   if (lesson.module.materials.length) {
-    groups.push(`<div class="files-group"><h3>Materiais do módulo</h3><div class="files-grid">${lesson.module.materials.map(fileLink).join('')}</div></div>`);
+    groups.push(`<div class="files-group"><h3>Materiais do módulo</h3><div class="file-list glass">${lesson.module.materials.map(fileLink).join('')}</div></div>`);
   }
   if (!groups.length) return '';
   const count = lesson.attachments.length + lesson.module.materials.length;
-  return `<section class="files-panel">
-    <header class="files-head">${icon('clip')}<h3>Arquivos para download</h3><span class="count">${count}</span></header>
-    ${groups.join('')}
+  return `<section class="files-panel" aria-labelledby="files-title">
+    <header class="files-head"><h2 id="files-title">Arquivos</h2><span class="muted">${count} ${count === 1 ? 'arquivo' : 'arquivos'}</span></header>
+    <div class="files-groups">${groups.join('')}</div>
   </section>`;
+}
+
+// ---------- Fundo ambiente ----------
+// Um quadro do vídeo, reduzido e desfocado, pinta o fundo: é o que dá cor ao vidro.
+
+const AMBIENT_INTERVAL_MS = 4000;
+const ambientCanvas = $('#ambient-canvas');
+let ambientAt = 0;
+
+function paintAmbient(video) {
+  ambientAt = Date.now();
+  if (!ambientCanvas || video.readyState < 2 || !video.videoWidth) return;
+  try {
+    const ctx = ambientCanvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, ambientCanvas.width, ambientCanvas.height);
+    // Quadro quase todo preto (ex.: início do vídeo) não dá cor nenhuma: mantém o fundo padrão.
+    const px = ctx.getImageData(0, 0, ambientCanvas.width, ambientCanvas.height).data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 4) sum += px[i] + px[i + 1] + px[i + 2];
+    document.body.classList.toggle('has-ambient', sum / (px.length / 4) > 30);
+  } catch {
+    document.body.classList.remove('has-ambient');
+  }
+}
+
+function clearAmbient() {
+  document.body.classList.remove('has-ambient');
 }
 
 function renderPlayer() {
   const lesson = state.current;
   const prev = neighbor(-1);
   const next = neighbor(1);
-  const speed = pref(SPEED_KEY, '1');
+  const speedPref = pref(SPEED_KEY, '1');
+  const speed = SPEEDS.includes(speedPref) ? speedPref : '1';
 
   const moduleIndex = state.course.modules.indexOf(lesson.module) + 1;
   const lessonIndex = lesson.module.lessons.indexOf(lesson) + 1;
@@ -407,9 +437,8 @@ function renderPlayer() {
         <a class="btn btn-primary ${next ? '' : 'disabled'}" ${next ? `href="${lessonHref(next)}"` : 'aria-disabled="true"'} title="Próxima aula (N)">Próxima ${icon('next')}</a>
       </div>
       <div class="player-prefs">
-        <label class="control">Velocidade
-          <select id="speed">${['0.75', '1', '1.25', '1.5', '1.75', '2'].map((v) => `<option value="${v}" ${v === speed ? 'selected' : ''}>${v}x</option>`).join('')}</select>
-        </label>
+        <div class="segmented glass" role="group" aria-label="Velocidade" id="speed">${SPEEDS.map((v) =>
+          `<button data-speed="${v}" aria-pressed="${v === speed}">${v.replace('.', ',')}×</button>`).join('')}</div>
         <label class="control switch"><input type="checkbox" id="autoplay" ${pref(AUTOPLAY_KEY, '1') === '1' ? 'checked' : ''}><span class="switch-track"></span> Avançar automaticamente</label>
       </div>
     </div>
@@ -433,7 +462,10 @@ function renderPlayer() {
     }
     video.playbackRate = Number(pref(SPEED_KEY, '1'));
   });
+  video.addEventListener('loadeddata', () => paintAmbient(video));
+  video.addEventListener('seeked', () => paintAmbient(video));
   video.addEventListener('timeupdate', () => {
+    if (Date.now() - ambientAt > AMBIENT_INTERVAL_MS) paintAmbient(video);
     if (state.current !== lesson || video.seeking) return;
     lesson.position = video.currentTime;
     if (Date.now() - state.lastSavedAt > SAVE_INTERVAL_MS) saveProgress();
@@ -449,9 +481,12 @@ function renderPlayer() {
     }
   });
 
-  $('#speed').addEventListener('change', (e) => {
-    setPref(SPEED_KEY, e.target.value);
-    video.playbackRate = Number(e.target.value);
+  $('#speed').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-speed]');
+    if (!btn) return;
+    setPref(SPEED_KEY, btn.dataset.speed);
+    video.playbackRate = Number(btn.dataset.speed);
+    $('#speed').querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
   });
   $('#autoplay').addEventListener('change', (e) => setPref(AUTOPLAY_KEY, e.target.checked ? '1' : '0'));
   $('#toggle-done').addEventListener('click', toggleDone);
@@ -551,6 +586,7 @@ async function route() {
       if (state.current) saveProgress(true);
       state.course = null;
       state.current = null;
+      clearAmbient();
       await renderHome();
     }
   } catch (err) {

@@ -11,7 +11,7 @@ const state = {
   course: null,       // curso carregado (resposta de /api/courses/:id)
   lessons: [],        // todas as aulas do curso, em ordem, com { module } anexado
   current: null,      // aula em reprodução
-  collapsed: new Set(), // módulos recolhidos na barra lateral
+  openModules: new Set(), // módulos expandidos na barra lateral
   lastSavedAt: 0,
   autoplayNext: false,  // ao terminar uma aula, a próxima começa sozinha
 };
@@ -138,13 +138,41 @@ viewer.addEventListener('click', (e) => {
 });
 viewer.addEventListener('close', () => { $('#viewer-frame').src = 'about:blank'; });
 
+// Ícones SVG (traço herda a cor do texto).
+const ICONS = {
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  prev: '<path d="m15 18-6-6 6-6"/>',
+  next: '<path d="m9 18 6-6-6-6"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+  zip: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M10 6h1M10 9h1M10 12h1M9.5 15h2v3h-2z"/>',
+  download: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  clip: '<path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>',
+  play: '<path d="M8 5v14l11-7z" fill="currentColor"/>',
+};
+function icon(name, cls = '') {
+  return `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+function fileKind(file) {
+  if (file.ext === '.pdf') return { icon: 'pdf', cls: 'is-pdf', action: 'Abrir', actionIcon: 'eye' };
+  if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(file.ext)) return { icon: 'zip', cls: 'is-zip', action: 'Baixar', actionIcon: 'download' };
+  return { icon: 'file', cls: '', action: 'Baixar', actionIcon: 'download' };
+}
+
 function fileLink(file) {
-  const icon = file.ext === '.pdf' ? '📄' : file.ext === '.zip' ? '🗜️' : '📎';
-  const meta = `<small>${formatSize(file.size)}</small>`;
+  const kind = fileKind(file);
+  const ext = file.ext.replace('.', '').toUpperCase() || 'ARQUIVO';
+  const inner = `<span class="file-icon ${kind.cls}">${icon(kind.icon)}</span>
+    <span class="file-body"><span class="file-name" title="${esc(file.name)}">${esc(file.name)}</span>
+    <small>${ext} · ${formatSize(file.size)}</small></span>
+    <span class="file-action">${icon(kind.actionIcon)}<span>${kind.action}</span></span>`;
   if (file.ext === '.pdf') {
-    return `<button class="file" data-pdf="${esc(file.path)}" data-name="${esc(file.name)}">${icon}<span>${esc(file.name)}</span>${meta}</button>`;
+    return `<button class="file" data-pdf="${esc(file.path)}" data-name="${esc(file.name)}">${inner}</button>`;
   }
-  return `<a class="file" href="${mediaUrl(file.path)}?download">${icon}<span>${esc(file.name)}</span>${meta}</a>`;
+  return `<a class="file" href="${mediaUrl(file.path)}?download">${inner}</a>`;
 }
 
 document.addEventListener('click', (e) => {
@@ -167,13 +195,21 @@ async function renderHome() {
 
   app.innerHTML = `<div class="home">
     <h1>Seus cursos</h1>
+    <p class="subtitle">${courses.length} curso(s) disponível(is)</p>
     <div class="cards">${courses.map((c) => {
       const p = pct(c.completed, c.total);
+      const cta = p === 100 ? 'Rever curso' : c.completed || c.watchedSeconds ? 'Continuar' : 'Começar';
       return `<a class="card" href="#/c/${encodeURIComponent(c.id)}">
-        <h2>${esc(c.title)}</h2>
-        <p class="muted">${c.moduleCount} módulo(s) · ${c.total} aula(s) · ${formatHours(c.totalSeconds)}</p>
+        <div class="card-top">
+          <span class="card-icon">${icon('play')}</span>
+          <div>
+            <h2>${esc(c.title)}</h2>
+            <p class="muted">${c.moduleCount} módulo(s) · ${c.total} aula(s) · ${formatHours(c.totalSeconds)}</p>
+          </div>
+        </div>
         ${progressBar(p, 'Progresso do curso')}
         <p class="stats"><strong>${p}%</strong> <span class="muted">${c.completed}/${c.total} aulas · ${formatHours(c.watchedSeconds)} assistidas</span></p>
+        <span class="card-cta">${cta} ${icon('next')}</span>
       </a>`;
     }).join('')}</div>
   </div>`;
@@ -186,6 +222,7 @@ async function loadCourse(courseId) {
   state.course = await api(`/api/courses/${encodeURIComponent(courseId)}`);
   state.lessons = state.course.modules.flatMap((m) => m.lessons.map((l) => Object.assign(l, { module: m })));
   state.current = null;
+  state.openModules = new Set();
 }
 
 async function renderCourse(courseId, lessonPath) {
@@ -213,12 +250,14 @@ async function renderCourse(courseId, lessonPath) {
       <aside class="sidebar" id="sidebar"></aside>
     </div>`;
   }
-  if (state.current !== lesson) {
+  const changed = state.current !== lesson;
+  if (changed) {
     if (state.current) saveProgress(true);
+    if (state.current?.module !== lesson.module) state.openModules.add(lesson.module.id);
     state.current = lesson;
     renderPlayer();
   }
-  renderSidebar();
+  renderSidebar({ reveal: changed });
   setBreadcrumb([
     { label: 'Cursos', href: '#/' },
     { label: course.title, href: `#/c/${encodeURIComponent(course.id)}` },
@@ -231,21 +270,24 @@ function lessonHref(lesson) {
 }
 
 function statusIcon(lesson) {
-  if (lesson.completed) return `<span class="status done" title="Concluída">✓</span>`;
+  if (lesson === state.current && !lesson.completed) return `<span class="status playing" title="Assistindo agora">${icon('play')}</span>`;
+  if (lesson.completed) return `<span class="status done" title="Concluída">${icon('check')}</span>`;
   const f = lessonFraction(lesson);
   return `<span class="status" style="--p:${Math.round(f * 100)}" title="${f ? `${Math.round(f * 100)}% assistido` : 'Não iniciada'}"></span>`;
 }
 
-function renderSidebar() {
+function renderSidebar({ reveal = false } = {}) {
   const sidebar = $('#sidebar');
   if (!sidebar) return;
-  const scroll = sidebar.scrollTop;
+  const list = $('#module-list', sidebar);
+  const scroll = list ? list.scrollTop : 0;
   const course = state.course;
   const all = summarize(state.lessons);
   const overall = pct(all.completed, all.total);
 
   sidebar.innerHTML = `
     <div class="overview">
+      <p class="overview-label">Curso</p>
       <h1>${esc(course.title)}</h1>
       <div class="overview-row">
         <div class="ring" style="--p:${overall}"><span>${overall}%</span></div>
@@ -255,31 +297,53 @@ function renderSidebar() {
         </div>
       </div>
     </div>
-    ${course.modules.map((m) => {
+    <div class="module-list" id="module-list">
+    ${course.modules.map((m, i) => {
       const s = summarize(m.lessons);
-      const open = !state.collapsed.has(m.id);
-      return `<details class="module" data-module="${esc(m.id)}" ${open ? 'open' : ''}>
-        <summary>
-          <span class="module-title">${esc(m.title)}</span>
-          <span class="module-meta">${s.completed}/${s.total}</span>
-          ${progressBar(pct(s.completed, s.total), `Progresso de ${m.title}`)}
-        </summary>
-        <ol class="lessons">${m.lessons.map((l) => `
-          <li><a href="${lessonHref(l)}" class="lesson ${l === state.current ? 'active' : ''}" ${l === state.current ? 'aria-current="true"' : ''}>
+      const p = pct(s.completed, s.total);
+      const open = state.openModules.has(m.id);
+      const isCurrent = state.current?.module === m;
+      const done = s.total > 0 && s.completed === s.total;
+      const files = m.materials.length + m.lessons.reduce((n, l) => n + l.attachments.length, 0);
+      return `<section class="module ${open ? 'open' : ''} ${isCurrent ? 'current' : ''} ${done ? 'complete' : ''}" data-module="${esc(m.id)}">
+        <button class="module-head" aria-expanded="${open}">
+          <span class="module-index">${done ? icon('check') : String(i + 1).padStart(2, '0')}</span>
+          <span class="module-info">
+            <span class="module-title">${esc(m.title)}</span>
+            <span class="module-meta">${s.completed}/${s.total} aulas · ${formatHours(s.totalSeconds)}${files ? ` · ${icon('clip', 'icon-xs')} ${files}` : ''}</span>
+            <span class="module-bar" aria-hidden="true"><span style="width:${p}%"></span></span>
+          </span>
+          ${icon('chevron', 'chevron')}
+        </button>
+        <ol class="lessons" ${open ? '' : 'hidden'}>${m.lessons.map((l, j) => `
+          <li><a href="${lessonHref(l)}" class="lesson ${l === state.current ? 'active' : ''} ${l.completed ? 'completed' : ''}" ${l === state.current ? 'aria-current="true"' : ''}>
             ${statusIcon(l)}
-            <span class="lesson-title">${esc(l.title)}</span>
+            <span class="lesson-title"><span class="lesson-num">${j + 1}.</span> ${esc(l.title)}</span>
+            ${l.attachments.length ? `<span class="lesson-clip" title="${l.attachments.length} arquivo(s)">${icon('clip', 'icon-xs')}</span>` : ''}
             <span class="lesson-time">${formatClock(l.duration)}</span>
           </a></li>`).join('')}
         </ol>
-        ${m.materials.length ? `<div class="materials"><h3>Materiais do módulo</h3>${m.materials.map(fileLink).join('')}</div>` : ''}
-      </details>`;
-    }).join('')}`;
-  sidebar.scrollTop = scroll;
+      </section>`;
+    }).join('')}
+    </div>`;
 
-  sidebar.querySelectorAll('details.module').forEach((d) => {
-    d.addEventListener('toggle', () => {
-      if (d.open) state.collapsed.delete(d.dataset.module);
-      else state.collapsed.add(d.dataset.module);
+  const newList = $('#module-list', sidebar);
+  newList.scrollTop = scroll;
+  if (reveal) {
+    const active = $('.lesson.active', newList);
+    if (active) {
+      const a = active.getBoundingClientRect();
+      const b = newList.getBoundingClientRect();
+      if (a.top < b.top || a.bottom > b.bottom) active.scrollIntoView({ block: 'center' });
+    }
+  }
+
+  newList.querySelectorAll('.module-head').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('.module').dataset.module;
+      if (state.openModules.has(id)) state.openModules.delete(id);
+      else state.openModules.add(id);
+      renderSidebar();
     });
   });
 }
@@ -300,33 +364,58 @@ function neighbor(offset) {
   return state.lessons[i + offset] ?? null;
 }
 
+/** Arquivos abaixo do vídeo: os da aula atual + os materiais do módulo (iguais para todas as aulas do módulo). */
+function renderFiles(lesson) {
+  const groups = [];
+  if (lesson.attachments.length) {
+    groups.push(`<div class="files-group"><h3>Desta aula</h3><div class="files-grid">${lesson.attachments.map(fileLink).join('')}</div></div>`);
+  }
+  if (lesson.module.materials.length) {
+    groups.push(`<div class="files-group"><h3>Materiais do módulo</h3><div class="files-grid">${lesson.module.materials.map(fileLink).join('')}</div></div>`);
+  }
+  if (!groups.length) return '';
+  const count = lesson.attachments.length + lesson.module.materials.length;
+  return `<section class="files-panel">
+    <header class="files-head">${icon('clip')}<h3>Arquivos para download</h3><span class="count">${count}</span></header>
+    ${groups.join('')}
+  </section>`;
+}
+
 function renderPlayer() {
   const lesson = state.current;
   const prev = neighbor(-1);
   const next = neighbor(1);
   const speed = pref(SPEED_KEY, '1');
 
-  $('#player-area').innerHTML = `
+  const moduleIndex = state.course.modules.indexOf(lesson.module) + 1;
+  const lessonIndex = lesson.module.lessons.indexOf(lesson) + 1;
+
+  $('#player-area').innerHTML = `<div class="player-inner">
     <div class="video-wrap">
       <video id="video" controls preload="metadata" playsinline src="${mediaUrl(lesson.path)}"></video>
     </div>
     <div class="lesson-head">
-      <div>
-        <p class="eyebrow">${esc(lesson.module.title)} · Aula ${state.lessons.indexOf(lesson) + 1} de ${state.lessons.length}</p>
+      <div class="lesson-heading">
+        <p class="eyebrow"><span class="pill">Módulo ${moduleIndex}</span> ${esc(lesson.module.title)} <span class="dot">·</span> Aula ${lessonIndex} de ${lesson.module.lessons.length}</p>
         <h2>${esc(lesson.title)}</h2>
       </div>
-      <button id="toggle-done" class="btn ${lesson.completed ? 'btn-done' : ''}"></button>
+      <button id="toggle-done" class="btn"></button>
     </div>
-    <div class="controls">
-      <a class="btn ${prev ? '' : 'disabled'}" ${prev ? `href="${lessonHref(prev)}"` : 'aria-disabled="true"'} title="Aula anterior (P)">← Anterior</a>
-      <a class="btn btn-primary ${next ? '' : 'disabled'}" ${next ? `href="${lessonHref(next)}"` : 'aria-disabled="true"'} title="Próxima aula (N)">Próxima →</a>
-      <label class="control">Velocidade
-        <select id="speed">${['0.75', '1', '1.25', '1.5', '1.75', '2'].map((v) => `<option value="${v}" ${v === speed ? 'selected' : ''}>${v}x</option>`).join('')}</select>
-      </label>
-      <label class="control"><input type="checkbox" id="autoplay" ${pref(AUTOPLAY_KEY, '1') === '1' ? 'checked' : ''}> Avançar automaticamente</label>
+    <div class="toolbar">
+      <div class="nav-buttons">
+        <a class="btn ${prev ? '' : 'disabled'}" ${prev ? `href="${lessonHref(prev)}"` : 'aria-disabled="true"'} title="Aula anterior (P)">${icon('prev')} Anterior</a>
+        <a class="btn btn-primary ${next ? '' : 'disabled'}" ${next ? `href="${lessonHref(next)}"` : 'aria-disabled="true"'} title="Próxima aula (N)">Próxima ${icon('next')}</a>
+      </div>
+      <div class="player-prefs">
+        <label class="control">Velocidade
+          <select id="speed">${['0.75', '1', '1.25', '1.5', '1.75', '2'].map((v) => `<option value="${v}" ${v === speed ? 'selected' : ''}>${v}x</option>`).join('')}</select>
+        </label>
+        <label class="control switch"><input type="checkbox" id="autoplay" ${pref(AUTOPLAY_KEY, '1') === '1' ? 'checked' : ''}><span class="switch-track"></span> Avançar automaticamente</label>
+      </div>
     </div>
-    ${lesson.attachments.length ? `<div class="attachments"><h3>Arquivos desta aula</h3>${lesson.attachments.map(fileLink).join('')}</div>` : ''}
-    <p class="hint muted">Atalhos: espaço/K pausar · J/L ±10s · N próxima · P anterior · F tela cheia · M concluir</p>`;
+    ${renderFiles(lesson)}
+    <p class="hint muted">Atalhos: <kbd>espaço</kbd>/<kbd>K</kbd> pausar · <kbd>J</kbd>/<kbd>L</kbd> ±10s · <kbd>N</kbd> próxima · <kbd>P</kbd> anterior · <kbd>F</kbd> tela cheia · <kbd>M</kbd> concluir</p>
+  </div>`;
 
   updateDoneButton();
   const video = $('#video');
@@ -371,7 +460,7 @@ function renderPlayer() {
 function updateDoneButton() {
   const btn = $('#toggle-done');
   if (!btn) return;
-  btn.textContent = state.current.completed ? '✓ Concluída' : 'Marcar como concluída';
+  btn.innerHTML = state.current.completed ? `${icon('check')} Concluída` : `${icon('check')} Marcar como concluída`;
   btn.classList.toggle('btn-done', state.current.completed);
 }
 

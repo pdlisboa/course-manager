@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parseFile } from 'music-metadata';
+import type { FileItem } from '../shared/api.ts';
 import { config } from './config.ts';
 import { getCachedDuration, setCachedDuration } from './db.ts';
 
@@ -11,14 +12,6 @@ import { getCachedDuration, setCachedDuration } from './db.ts';
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.m4v', '.mov', '.ogv']);
 const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
-
-export interface FileItem {
-  name: string;
-  /** Caminho relativo a COURSES_DIR, sempre com "/". */
-  path: string;
-  ext: string;
-  size: number;
-}
 
 export interface Lesson {
   path: string;

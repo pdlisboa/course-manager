@@ -1,4 +1,6 @@
 {
+  // Servidor (Node roda o TS direto) + código compartilhado + config do Vite.
+  // O front tem o próprio tsconfig em web/.
   "compilerOptions": {
     "target": "ES2024",
     "module": "NodeNext",
@@ -11,5 +13,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src"]
+  "include": ["src", "shared", "vite.config.ts"]
 }

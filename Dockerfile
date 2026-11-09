@@ -1,3 +1,14 @@
+# ---------- 1. Compila o front (Vue + Vite) ----------
+FROM node:24-slim AS web
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY vite.config.ts ./
+COPY shared ./shared
+COPY web ./web
+RUN npm run build
+
+# ---------- 2. Imagem final: só o servidor e o front já compilado ----------
 FROM node:24-slim
 
 ENV NODE_ENV=production \
@@ -11,7 +22,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
-COPY public ./public
+COPY shared ./shared
+COPY --from=web /app/dist ./dist
 
 RUN mkdir -p /data && chown node:node /data
 USER node

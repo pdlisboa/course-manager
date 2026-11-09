@@ -1,0 +1,14 @@
+{
+  // Front (Vue + Vite), verificado com vue-tsc.
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "erasableSyntaxOnly": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "../shared/**/*.ts"]
+}

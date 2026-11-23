@@ -10,14 +10,17 @@ MyCourse/
   01 - Introduction/
     01 - Welcome.mp4
     01 - Welcome.pdf         ← same name as the video = attached to that lesson
-    materials.zip            ← no matching video = module material
+    02 - Exercises.pdf       ← numbered, no video = a lesson of its own (open it, mark it done)
+    03 - Podcast.mp3         ← numbered audio = an audio lesson, with player and progress
+    materials.zip            ← not numbered, no video = module material
   02 - Basics/
     ...
 ```
 
 - Each **subfolder** is a **module**; each **video** (`.mp4`, `.webm`, `.m4v`, `.mov`) is a **lesson**.
+- A file with no matching video becomes a lesson too when its name starts with a number, or when the module has no videos at all. Audio (`.mp3`, `.m4a`, `.ogg`, …) plays in the app; PDFs open inline; other files get a download button. These lessons can be marked as completed like any other.
 - Order follows the file names (natural sort: "2" comes before "10"). Leading numbers are hidden from titles.
-- PDFs open inside the app; ZIPs and other files are downloaded.
+- PDFs open inside the app; audio files can be played right in the file list or downloaded; ZIPs and other files are downloaded.
 
 ## Environment variables
 

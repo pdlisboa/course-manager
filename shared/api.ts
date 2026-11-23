@@ -10,9 +10,15 @@ export interface FileItem {
   size: number;
 }
 
+/** video/audio tocam no player; file é um documento (PDF, ZIP…) que só se abre ou baixa. */
+export type LessonKind = 'video' | 'audio' | 'file';
+
 export interface LessonView {
   path: string;
   title: string;
+  kind: LessonKind;
+  /** O arquivo principal da aula (o próprio vídeo, áudio ou documento). */
+  file: FileItem;
   duration: number | null;
   attachments: FileItem[];
   position: number;

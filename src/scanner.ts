@@ -1,21 +1,28 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parseFile } from 'music-metadata';
-import type { FileItem } from '../shared/api.ts';
+import type { FileItem, LessonKind } from '../shared/api.ts';
+import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from '../shared/media.ts';
 import { config } from './config.ts';
 import { getCachedDuration, setCachedDuration } from './db.ts';
 
 // Varre a pasta de cursos e monta a árvore curso → módulo → aula.
-// Estrutura esperada: <curso>/<módulo>/<arquivos>. Arquivos com o mesmo nome base
-// de um vídeo (ex.: "01 - Aula.pdf" ao lado de "01 - Aula.mp4") viram anexos da aula;
-// os demais viram materiais do módulo.
+// Estrutura esperada: <curso>/<módulo>/<arquivos>.
+// - Cada vídeo é uma aula. Arquivos com o mesmo nome base de um vídeo (ex.: "01 - Aula.pdf"
+//   ao lado de "01 - Aula.mp4") viram anexos dela.
+// - Arquivos sem vídeo correspondente viram aulas "de arquivo" (áudio, PDF, etc.) quando o nome
+//   é numerado ("03 - Exercício.pdf") ou quando o módulo não tem nenhum vídeo. Assim dá pra
+//   abrir e marcar como concluídas. Os demais ("materiais.zip") são materiais do módulo.
 
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.m4v', '.mov', '.ogv']);
+const NUMBERED = /^\s*\d+\s*[-._)]+\s*/;
 const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
 
 export interface Lesson {
   path: string;
   title: string;
+  kind: LessonKind;
+  /** O arquivo principal da aula (o próprio vídeo, áudio ou documento). */
+  file: FileItem;
   duration: number | null;
   attachments: FileItem[];
 }
@@ -51,7 +58,7 @@ export function getLesson(relPath: string): Lesson | undefined {
 
 /** Remove numeração do início ("01 - Introdução" → "Introdução"). */
 export function cleanTitle(name: string): string {
-  return name.replace(/^\s*\d+\s*[-._)]+\s*/, '').trim() || name;
+  return name.replace(NUMBERED, '').trim() || name;
 }
 
 function toRelative(absPath: string): string {
@@ -83,45 +90,64 @@ async function listFiles(dir: string, recursive: boolean): Promise<string[]> {
   return files;
 }
 
+function kindOf(ext: string): LessonKind {
+  if (VIDEO_EXTENSIONS.has(ext)) return 'video';
+  if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
+  return 'file';
+}
+
+/** Entre arquivos de mesmo nome base sem vídeo, qual vira a aula: áudio, depois PDF, depois o primeiro. */
+function primaryRank(file: FileItem): number {
+  if (AUDIO_EXTENSIONS.has(file.ext)) return 0;
+  if (file.ext === '.pdf') return 1;
+  return 2;
+}
+
 async function buildModule(moduleDir: string, id: string, title: string, recursive: boolean): Promise<Module | null> {
   const files = await listFiles(moduleDir, recursive);
   if (files.length === 0) return null;
 
-  const lessonsByStem = new Map<string, Lesson>();
-  const others: FileItem[] = [];
-
-  for (const abs of files) {
+  // Agrupa por nome base (caminho sem extensão).
+  const groups = new Map<string, FileItem[]>();
+  for (const abs of sortByName(files, (f) => f)) {
     const ext = path.extname(abs).toLowerCase();
     const stem = abs.slice(0, abs.length - ext.length);
-    if (VIDEO_EXTENSIONS.has(ext)) {
-      // Aulas em subpastas do módulo ganham o nome da subpasta como prefixo.
-      const subdir = path.relative(moduleDir, path.dirname(abs));
-      const baseTitle = cleanTitle(path.basename(stem));
-      lessonsByStem.set(stem, {
-        path: toRelative(abs),
-        title: subdir ? `${subdir.split(path.sep).map(cleanTitle).join(' / ')} / ${baseTitle}` : baseTitle,
-        duration: null,
-        attachments: [],
-      });
-    } else {
-      const stat = await fs.stat(abs);
-      others.push({ name: path.basename(abs), path: toRelative(abs), ext, size: stat.size });
-    }
+    const stat = await fs.stat(abs);
+    const item: FileItem = { name: path.basename(abs), path: toRelative(abs), ext, size: stat.size };
+    const group = groups.get(stem);
+    if (group) group.push(item);
+    else groups.set(stem, [item]);
   }
 
+  const hasVideo = files.some((f) => VIDEO_EXTENSIONS.has(path.extname(f).toLowerCase()));
+  const lessons: Lesson[] = [];
   const materials: FileItem[] = [];
-  for (const file of others) {
-    const abs = path.join(config.coursesDir, file.path);
-    const stem = abs.slice(0, abs.length - file.ext.length);
-    const lesson = lessonsByStem.get(stem);
-    if (lesson) lesson.attachments.push(file);
-    else materials.push(file);
+
+  for (const [stem, items] of groups) {
+    const video = items.find((f) => VIDEO_EXTENSIONS.has(f.ext));
+    const baseName = path.basename(stem);
+    if (!video && hasVideo && !NUMBERED.test(baseName)) {
+      materials.push(...items);
+      continue;
+    }
+    const main = video ?? [...items].sort((a, b) => primaryRank(a) - primaryRank(b))[0]!;
+    // Aulas em subpastas do módulo ganham o nome da subpasta como prefixo.
+    const subdir = path.relative(moduleDir, path.dirname(stem));
+    const baseTitle = cleanTitle(baseName);
+    lessons.push({
+      path: main.path,
+      title: subdir ? `${subdir.split(path.sep).map(cleanTitle).join(' / ')} / ${baseTitle}` : baseTitle,
+      kind: kindOf(main.ext),
+      file: main,
+      duration: null,
+      attachments: items.filter((f) => f !== main),
+    });
   }
 
   return {
     id,
     title,
-    lessons: sortByName([...lessonsByStem.values()], (l) => l.path),
+    lessons: sortByName(lessons, (l) => l.path),
     materials: sortByName(materials, (m) => m.path),
   };
 }
@@ -187,11 +213,11 @@ async function doScan(): Promise<void> {
       for (const lesson of module.lessons) index.set(lesson.path, lesson);
     }
   }
-  await runPool([...index.values()], 4, readDuration);
+  await runPool([...index.values()].filter((l) => l.kind !== 'file'), 4, readDuration);
 
   courses = found;
   lessonIndex = index;
-  console.log(`Varredura concluída: ${found.length} curso(s), ${index.size} vídeo(s) em ${Date.now() - started} ms`);
+  console.log(`Varredura concluída: ${found.length} curso(s), ${index.size} aula(s) em ${Date.now() - started} ms`);
 }
 
 /** Varre as pastas novamente. Chamadas simultâneas compartilham a mesma varredura. */

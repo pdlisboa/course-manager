@@ -13,6 +13,8 @@
   --pdf-soft: rgba(255, 59, 48, 0.12);
   --zip: #a05a00;
   --zip-soft: rgba(255, 149, 0, 0.15);
+  --audio: #8944ab;
+  --audio-soft: rgba(175, 82, 222, 0.14);
 
   /* Vidro */
   --glass: rgba(255, 255, 255, 0.62);
@@ -52,6 +54,8 @@
     --pdf-soft: rgba(255, 69, 58, 0.18);
     --zip: #ffb340;
     --zip-soft: rgba(255, 159, 10, 0.18);
+    --audio: #da8fff;
+    --audio-soft: rgba(191, 90, 242, 0.2);
     --glass: rgba(32, 32, 38, 0.55);
     --glass-solid: #1c1c21;
     --glass-edge: rgba(255, 255, 255, 0.09);
@@ -82,6 +86,8 @@
   --pdf-soft: rgba(255, 69, 58, 0.18);
   --zip: #ffb340;
   --zip-soft: rgba(255, 159, 10, 0.18);
+  --audio: #da8fff;
+  --audio-soft: rgba(191, 90, 242, 0.2);
   --glass: rgba(32, 32, 38, 0.55);
   --glass-solid: #1c1c21;
   --glass-edge: rgba(255, 255, 255, 0.09);
@@ -280,6 +286,26 @@ body.has-ambient .blob { opacity: 0.25; }
 }
 .video-wrap video { display: block; width: 100%; height: 100%; }
 
+/* Aula de áudio */
+.audio-stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  min-height: 280px; padding: 40px 24px; border-radius: var(--radius);
+}
+.audio-art {
+  display: grid; place-items: center; width: 112px; height: 112px; border-radius: 28px;
+  background: var(--audio-soft); color: var(--audio);
+}
+.audio-art .icon { width: 52px; height: 52px; stroke-width: 1.6; }
+.audio-stage audio { width: min(640px, 100%); }
+
+/* Aula de documento (PDF aberto na página, ou cartão para baixar) */
+.doc-stage { display: flex; flex-direction: column; border-radius: var(--radius); overflow: hidden; }
+.doc-bar { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+.doc-bar .file-body { padding: 0; }
+.doc-actions { display: flex; gap: 8px; flex: none; }
+.is-pdf-stage .doc-bar { border-bottom: 0.5px solid var(--sep); }
+.doc-stage iframe { display: block; width: 100%; height: 75vh; min-height: 420px; border: 0; background: #fff; }
+
 .lesson-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 24px; }
 .lesson-heading { flex: 1 1 340px; min-width: 0; }
 .lesson-head h2 { font-size: 32px; font-weight: 700; line-height: 1.12; letter-spacing: -0.025em; }
@@ -355,6 +381,7 @@ body.has-ambient .blob { opacity: 0.25; }
 }
 .file-icon.is-pdf { background: var(--pdf-soft); color: var(--pdf); }
 .file-icon.is-zip { background: var(--zip-soft); color: var(--zip); }
+.file-icon.is-audio { background: var(--audio-soft); color: var(--audio); }
 .file-body {
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   padding: 11px 0;
@@ -365,6 +392,21 @@ body.has-ambient .blob { opacity: 0.25; }
 .file small { color: var(--muted); font-size: 13px; }
 .file-action { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 600; color: var(--accent-text); flex: none; }
 .file-action .icon { width: 16px; height: 16px; }
+
+/* Áudio: a linha abre um player embutido; o botão ao lado baixa. */
+.file.has-player { flex-wrap: wrap; gap: 0 4px; padding-right: 8px; cursor: default; }
+.file-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; align-self: stretch;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 0;
+}
+.file.has-player + .file .file-body, .file + .file.has-player .file-body { border-top: 0.5px solid var(--sep); }
+.file-icon-btn {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 50%;
+  color: var(--accent-text);
+}
+.file-icon-btn:hover { background: var(--hover); }
+.file-icon-btn .icon { width: 18px; height: 18px; }
+.file-player { flex-basis: 100%; width: 100%; height: 40px; margin: 0 0 12px; }
 
 /* ---------- Barra lateral ---------- */
 .overview { flex: none; padding: 22px 22px 18px; }
@@ -420,7 +462,8 @@ body.has-ambient .blob { opacity: 0.25; }
 .lesson.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .lesson.completed:not(.active) .lesson-title { color: var(--muted); }
 .lesson-num { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 2px; font-weight: 400; }
-.lesson-clip { color: var(--muted); }
+.lesson-clip, .lesson-kind { color: var(--muted); }
+.lesson-kind { align-self: stretch; display: flex; align-items: center; border-top: 0.5px solid var(--sep); padding-left: 4px; }
 .lesson-time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; }
 
 .status {
@@ -475,7 +518,11 @@ body.has-ambient .blob { opacity: 0.25; }
   .course { display: block; height: auto; padding: 14px 10px 16px; }
   .player-area { overflow: visible; border-radius: 0; }
   .player-inner { gap: 16px; }
-  .video-wrap { border-radius: 18px; }
+  .video-wrap, .audio-stage, .doc-stage { border-radius: 18px; }
+  .doc-bar { flex-wrap: wrap; }
+  .doc-actions { width: 100%; }
+  .doc-actions .btn { flex: 1; }
+  .doc-stage iframe { height: 70vh; }
   .lesson-head h2 { font-size: 26px; }
   .lesson-head .btn { width: 100%; }
   .toolbar { flex-direction: column; align-items: stretch; }

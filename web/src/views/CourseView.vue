@@ -66,7 +66,7 @@ onBeforeUnmount(() => {
   </EmptyState>
   <div v-else-if="!store.course" class="loading">Carregando…</div>
   <EmptyState v-else-if="!store.lessons.length" :title="store.course.title">
-    <p>Nenhum vídeo encontrado neste curso.</p>
+    <p>Nenhuma aula encontrada neste curso.</p>
   </EmptyState>
   <div v-else class="course">
     <section class="player-area">

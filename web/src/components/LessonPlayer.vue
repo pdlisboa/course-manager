@@ -3,6 +3,7 @@ import { computed, ref, useTemplateRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import type { LessonView, ModuleView } from '@shared/api.ts';
 import AppIcon from './AppIcon.vue';
+import DocumentStage from './DocumentStage.vue';
 import FilesPanel from './FilesPanel.vue';
 import SpeedControl from './SpeedControl.vue';
 import { useAmbient } from '@/composables/useAmbient.ts';
@@ -17,11 +18,12 @@ const store = useCourseStore();
 const router = useRouter();
 const ambient = useAmbient();
 const { speed, autoAdvance } = usePlayerPrefs();
-const video = useTemplateRef<HTMLVideoElement>('video');
+// <video> ou <audio>, conforme a aula; nulo em aulas de documento.
+const media = useTemplateRef<HTMLMediaElement>('media');
 
 const lessonIndex = computed(() => props.module.lessons.indexOf(props.lesson) + 1);
 
-// Cada aula ganha um <video> novo (key = caminho). Se a anterior terminou com o
+// Cada aula ganha um <video>/<audio> novo (key = caminho). Se a anterior terminou com o
 // avanço automático ligado, esta já começa tocando.
 const autoplay = ref(false);
 watch(
@@ -34,11 +36,19 @@ watch(
 );
 
 watch(speed, (value) => {
-  if (video.value) video.value.playbackRate = Number(value);
+  if (media.value) media.value.playbackRate = Number(value);
 });
 
+/** O fundo ambiente usa um quadro do vídeo; áudio não tem imagem. */
+function paintAmbient(onlyIfDue = false): void {
+  const el = media.value;
+  if (!(el instanceof HTMLVideoElement)) return;
+  if (onlyIfDue) ambient.paintIfDue(el);
+  else ambient.paint(el);
+}
+
 function onLoadedMetadata(): void {
-  const el = video.value;
+  const el = media.value;
   if (!el) return;
   if (Number.isFinite(el.duration)) store.setDuration(el.duration);
   // Retoma de onde parou (se não estava no finalzinho).
@@ -48,14 +58,14 @@ function onLoadedMetadata(): void {
 }
 
 function onTimeUpdate(): void {
-  const el = video.value;
+  const el = media.value;
   if (!el) return;
-  ambient.paintIfDue(el);
+  paintAmbient(true);
   if (!el.seeking) store.trackPosition(el.currentTime);
 }
 
 async function onEnded(): Promise<void> {
-  const el = video.value;
+  const el = media.value;
   if (el) store.trackPosition(el.duration);
   await store.saveProgress();
   if (store.next && autoAdvance.value) {
@@ -70,10 +80,19 @@ function go(target: LessonView | null): void {
 
 async function toggleDone(): Promise<void> {
   const lesson = await store.toggleDone();
-  if (lesson && !lesson.completed && video.value) video.value.currentTime = 0;
+  if (lesson && !lesson.completed && media.value) media.value.currentTime = 0;
 }
 
-usePlayerShortcuts(video, {
+const mediaEvents = {
+  loadedmetadata: onLoadedMetadata,
+  loadeddata: () => paintAmbient(),
+  seeked: () => paintAmbient(),
+  timeupdate: onTimeUpdate,
+  pause: () => store.saveProgress(),
+  ended: onEnded,
+};
+
+usePlayerShortcuts(media, {
   next: () => go(store.next),
   previous: () => go(store.previous),
   toggleDone,
@@ -82,24 +101,32 @@ usePlayerShortcuts(video, {
 
 <template>
   <div class="player-inner">
-    <div class="video-wrap">
+    <div v-if="lesson.kind === 'video'" class="video-wrap">
       <video
         id="video"
-        ref="video"
+        ref="media"
         :key="lesson.path"
         :src="mediaUrl(lesson.path)"
         :autoplay="autoplay"
         controls
         preload="metadata"
         playsinline
-        @loadedmetadata="onLoadedMetadata"
-        @loadeddata="video && ambient.paint(video)"
-        @seeked="video && ambient.paint(video)"
-        @timeupdate="onTimeUpdate"
-        @pause="store.saveProgress()"
-        @ended="onEnded"
+        v-on="mediaEvents"
       />
     </div>
+    <div v-else-if="lesson.kind === 'audio'" class="audio-stage glass">
+      <span class="audio-art"><AppIcon name="audio" /></span>
+      <audio
+        ref="media"
+        :key="lesson.path"
+        :src="mediaUrl(lesson.path)"
+        :autoplay="autoplay"
+        controls
+        preload="metadata"
+        v-on="mediaEvents"
+      />
+    </div>
+    <DocumentStage v-else :key="lesson.path" :file="lesson.file" />
 
     <div class="lesson-head">
       <div class="lesson-heading">
@@ -125,7 +152,7 @@ usePlayerShortcuts(video, {
         </RouterLink>
         <a v-else class="btn btn-primary disabled" aria-disabled="true">Próxima <AppIcon name="next" /></a>
       </div>
-      <div class="player-prefs">
+      <div v-if="lesson.kind !== 'file'" class="player-prefs">
         <SpeedControl v-model="speed" />
         <label class="control switch">
           <input v-model="autoAdvance" type="checkbox" /><span class="switch-track" /> Avançar automaticamente
@@ -135,9 +162,13 @@ usePlayerShortcuts(video, {
 
     <FilesPanel :lesson="lesson" :module="module" />
 
-    <p class="hint muted">
+    <p v-if="lesson.kind === 'file'" class="hint muted">
+      Atalhos: <kbd>N</kbd> próxima · <kbd>P</kbd> anterior · <kbd>M</kbd> concluir
+    </p>
+    <p v-else class="hint muted">
       Atalhos: <kbd>espaço</kbd>/<kbd>K</kbd> pausar · <kbd>J</kbd>/<kbd>L</kbd> ±10s · <kbd>N</kbd> próxima ·
-      <kbd>P</kbd> anterior · <kbd>F</kbd> tela cheia · <kbd>M</kbd> concluir
+      <kbd>P</kbd> anterior<template v-if="lesson.kind === 'video'"> · <kbd>F</kbd> tela cheia</template> ·
+      <kbd>M</kbd> concluir
     </p>
   </div>
 </template>

@@ -4,6 +4,7 @@ import type { ModuleView } from '@shared/api.ts';
 import { pct, summarize } from '@shared/progress.ts';
 import AppIcon from './AppIcon.vue';
 import LessonStatus from './LessonStatus.vue';
+import { extLabel } from '@/lib/files.ts';
 import { formatClock, formatHours } from '@/lib/format.ts';
 import { lessonRoute } from '@/lib/links.ts';
 import { useCourseStore } from '@/stores/course.ts';
@@ -51,7 +52,10 @@ const fileCount = computed(
           <span v-if="lesson.attachments.length" class="lesson-clip" :title="`${lesson.attachments.length} arquivo(s)`">
             <AppIcon name="clip" class="icon-xs" />
           </span>
-          <span class="lesson-time">{{ formatClock(lesson.duration) }}</span>
+          <span v-if="lesson.kind !== 'video'" class="lesson-kind" :title="lesson.kind === 'audio' ? 'Áudio' : 'Arquivo'">
+            <AppIcon :name="lesson.kind === 'audio' ? 'audio' : 'file'" class="icon-xs" />
+          </span>
+          <span class="lesson-time">{{ lesson.kind === 'file' ? extLabel(lesson.file) : formatClock(lesson.duration) }}</span>
         </RouterLink>
       </li>
     </ol>
